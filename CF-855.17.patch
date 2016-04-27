@@ -1,0 +1,121 @@
+diff -up CF-855.17/CFInternal.h.orig CF-855.17/CFInternal.h
+--- CF-855.17/CFInternal.h.orig	2016-04-27 10:18:34.506054944 +0800
++++ CF-855.17/CFInternal.h	2016-04-27 10:18:51.686237992 +0800
+@@ -94,6 +94,7 @@ CF_EXTERN_C_BEGIN
+ #include <sys/time.h>
+ #include <signal.h>
+ #include <stdio.h>
++#include <dispatch/dispatch.h>
+ #endif
+ #include <pthread.h>
+ 
+diff -up CF-855.17/CFPlatform.c.orig CF-855.17/CFPlatform.c
+--- CF-855.17/CFPlatform.c.orig	2016-04-27 10:21:38.263316912 +0800
++++ CF-855.17/CFPlatform.c	2016-04-27 10:21:56.740438287 +0800
+@@ -1108,12 +1108,12 @@ void OSMemoryBarrier() {
+     __sync_synchronize();
+ }
+ 
+-#include <Block_private.h>
++// #include <Block_private.h>
+ 
+-void dispatch_once(dispatch_once_t *predicate, dispatch_block_t block) {
+-    struct Block_layout *layout = (struct Block_layout *)block; 
+-    pthread_once(predicate, (void (*)(void))layout->invoke);
+-}
++// void dispatch_once(dispatch_once_t *predicate, dispatch_block_t block) {
++//    struct Block_layout *layout = (struct Block_layout *)block; 
++//    pthread_once(predicate, (void (*)(void))layout->invoke);
++// }
+ 
+ #endif // DEPLOYMENT_TARGET_LINUX
+ 
+diff -up CF-855.17/CFRuntime.c.orig CF-855.17/CFRuntime.c
+--- CF-855.17/CFRuntime.c.orig	2016-04-27 10:19:44.535724891 +0800
++++ CF-855.17/CFRuntime.c	2016-04-27 10:19:58.822045547 +0800
+@@ -217,12 +217,6 @@ int __CFConstantStringClassReference[12]
+ #endif
+ #endif
+ 
+-#if __LP64__
+-int __CFConstantStringClassReference[24] = {0};
+-#else
+-int __CFConstantStringClassReference[12] = {0};
+-#endif
+-
+ void *__CFConstantStringClassReferencePtr = NULL;
+ 
+ Boolean _CFIsObjC(CFTypeID typeID, void *obj) {
+diff -up CF-855.17/CFTimeZone.c.orig CF-855.17/CFTimeZone.c
+--- CF-855.17/CFTimeZone.c.orig	2016-04-27 10:22:11.909716958 +0800
++++ CF-855.17/CFTimeZone.c	2016-04-27 10:22:24.868100761 +0800
+@@ -81,7 +81,7 @@ static void __InitTZStrings(void);
+ 
+ #if DEPLOYMENT_TARGET_LINUX
+ // Symbol aliases
+-CF_EXPORT CFStringRef const kCFDateFormatterTimeZone __attribute__((weak, alias ("kCFDateFormatterTimeZoneKey")));
++// CF_EXPORT CFStringRef const kCFDateFormatterTimeZone __attribute__((weak, alias ("kCFDateFormatterTimeZoneKey")));
+ #endif
+ 
+ CONST_STRING_DECL(kCFTimeZoneSystemTimeZoneDidChangeNotification, "kCFTimeZoneSystemTimeZoneDidChangeNotification")
+diff -up CF-855.17/CoreFoundation_Prefix.h.orig CF-855.17/CoreFoundation_Prefix.h
+--- CF-855.17/CoreFoundation_Prefix.h.orig	2016-04-27 10:19:02.343731207 +0800
++++ CF-855.17/CoreFoundation_Prefix.h	2016-04-27 10:26:40.383950462 +0800
+@@ -110,6 +110,14 @@ typedef int		boolean_t;
+ #define __strong
+ #define __weak
+ 
++#include <time.h>
++CF_INLINE uint64_t
++mach_absolute_time(){
++  struct timespec ts;
++  clock_gettime(CLOCK_MONOTONIC, &ts);
++  return ts.tv_sec * 1000000000 + ts.tv_nsec;
++}
++
+ #define strtod_l(a,b,locale) strtod(a,b)
+ #define strtoul_l(a,b,c,locale) strtoul(a,b,c)
+ #define strtol_l(a,b,c,locale) strtol(a,b,c)
+@@ -171,9 +179,9 @@ CF_INLINE size_t malloc_size(void *membl
+ }
+     
+ // substitute for dispatch_once
+-typedef pthread_once_t dispatch_once_t;
+-typedef void (^dispatch_block_t)(void);
+-void dispatch_once(dispatch_once_t *predicate, dispatch_block_t block);
++// typedef pthread_once_t dispatch_once_t;
++// typedef void (^dispatch_block_t)(void);
++// void dispatch_once(dispatch_once_t *predicate, dispatch_block_t block);
+ 
+ #endif
+ 
+diff -up CF-855.17/MakefileLinux.orig CF-855.17/MakefileLinux
+--- CF-855.17/MakefileLinux.orig	2014-08-16 05:19:37.000000000 +0800
++++ CF-855.17/MakefileLinux	2016-04-27 10:28:05.613897610 +0800
+@@ -5,7 +5,7 @@ MIN_MACOSX_VERSION=10.9
+ MAX_MACOSX_VERSION=MAC_OS_X_VERSION_10_9
+ 
+ OBJECTS = CFCharacterSet.o CFPreferences.o CFApplicationPreferences.o CFXMLPreferencesDomain.o CFStringEncodingConverter.o CFUniChar.o CFArray.o CFOldStylePList.o CFPropertyList.o CFStringEncodingDatabase.o CFUnicodeDecomposition.o CFBag.o CFData.o  CFStringEncodings.o CFUnicodePrecomposition.o CFBase.o CFDate.o CFNumber.o CFRuntime.o CFStringScanner.o CFBinaryHeap.o CFDateFormatter.o CFNumberFormatter.o CFSet.o CFStringUtilities.o CFUtilities.o CFBinaryPList.o CFDictionary.o CFPlatform.o CFSystemDirectories.o CFVersion.o CFBitVector.o CFError.o CFPlatformConverters.o CFTimeZone.o  CFBuiltinConverters.o CFFileUtilities.o  CFSortFunctions.o CFTree.o CFICUConverters.o CFURL.o CFLocale.o  CFURLAccess.o CFCalendar.o CFLocaleIdentifier.o CFString.o CFUUID.o CFStorage.o CFLocaleKeys.o
+-OBJECTS += CFBasicHash.o
++OBJECTS += CFBasicHash.o CFBigNumber.o CFBurstTrie.o
+ HFILES = $(wildcard *.h)
+ INTERMEDIATE_HFILES = $(addprefix $(OBJBASE)/CoreFoundation/,$(HFILES))
+ 
+@@ -17,7 +17,7 @@ RESOURCES = CFCharacterSetBitmaps.bitmap
+ 
+ OBJBASE_ROOT = CF-Objects
+ OBJBASE = $(OBJBASE_ROOT)/$(STYLE)
+-DSTBASE = /usr/local
++DSTBASE = /usr
+ 
+ STYLE=normal
+ STYLE_CFLAGS=-O0 -g
+@@ -30,7 +30,7 @@ CFLAGS=-c -x c -fblocks -fpic -pipe -std
+ LFLAGS=-shared -fpic -init=___CFInitialize -Wl,--no-undefined,-soname,libCoreFoundation.so
+ 
+ # Libs for open source version of ICU
+-LIBS=-lc -lpthread -lm -lrt  -licuuc -licudata -licui18n -lBlocksRuntime
++LIBS=-lc -lpthread -lm -lrt  -licuuc -licudata -licui18n -lBlocksRuntime -ldispatch
+ 
+ .PHONY: all install clean
+ .PRECIOUS: $(OBJBASE)/CoreFoundation/%.h

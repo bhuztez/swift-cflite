@@ -1,0 +1,6 @@
+module CoreFoundation [system] {
+    header "/usr/include/CoreFoundation/CoreFoundation.h"
+    link "CoreFoundation"
+    link "pthread_workqueue"
+    export *
+}
